@@ -278,13 +278,13 @@ class String(Value):
 
     def get_comparison_eq(self, other):
         if isinstance(other, String):
-            return String(str(self.value == other.value)).set_context(self.context), None
+            return Number(int(self.value == other.value)).set_context(self.context), None
         else:
             return None, Value.illegal_operation(self, other)
 
     def get_comparison_ne(self, other):
         if isinstance(other, String):
-            return String(str(self.value != other.value)).set_context(self.context), None
+            return Number(int(self.value != other.value)).set_context(self.context), None
         else:
             return None, Value.illegal_operation(self, other)
 
@@ -334,9 +334,10 @@ class Accessor(Value):
         elif self.accessor_id == 'HEALTH':
             return Number(self.accessor_context.health)
         elif self.accessor_id == 'POSITION':
-            return Number(self.accessor_context.position)
+            positions = [Number(self.accessor_context.position[0]), Number(self.accessor_context.position[1])]
+            return List(positions)
         elif self.accessor_id == 'DIRECTION':
-            return Number(self.accessor_context.direction)
+            return String(self.accessor_context.direction)
         else:
             res = RTResult()
             return res.failure(RTError(
@@ -857,9 +858,9 @@ class Interpreter:
             result, error = left.get_comparison_lte(right)
         elif node.op_tok.type == TT_GTE:
             result, error = left.get_comparison_gte(right)
-        elif node.op_tok.matches(TT_KEYWORD, 'AND'):
+        elif node.op_tok.matches(TT_KEYWORD, 'and'):
             result, error = left.anded_by(right)
-        elif node.op_tok.matches(TT_KEYWORD, 'OR'):
+        elif node.op_tok.matches(TT_KEYWORD, 'or'):
             result, error = left.ored_by(right)
 
         if error:
@@ -1069,7 +1070,7 @@ def run(fn, text):
         print(data)
 
     # Run program
-    accessor_context = AccessorContext("ENEMY", 1, 2, 3)
+    accessor_context = AccessorContext("ENEMY", 1, [2, 10], "UP")
     interpreter = Interpreter(accessor_context)
     context = Context('<program>')
     context.symbol_table = global_symbol_table
