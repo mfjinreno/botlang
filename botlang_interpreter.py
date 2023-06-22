@@ -58,6 +58,12 @@ class RTResult:
                 self.loop_should_break
         )
 
+class AccessorContext:
+    def __init__(self, front_neighbor, health, position, direction):
+        self.front_neighbor = front_neighbor
+        self.health = health
+        self.position = position
+        self.direction = direction
 
 
 #######################################
@@ -270,6 +276,18 @@ class String(Value):
         else:
             return None, Value.illegal_operation(self, other)
 
+    def get_comparison_eq(self, other):
+        if isinstance(other, String):
+            return String(str(self.value == other.value)).set_context(self.context), None
+        else:
+            return None, Value.illegal_operation(self, other)
+
+    def get_comparison_ne(self, other):
+        if isinstance(other, String):
+            return String(str(self.value != other.value)).set_context(self.context), None
+        else:
+            return None, Value.illegal_operation(self, other)
+
     def is_true(self):
         return len(self.value) > 0
 
@@ -284,6 +302,60 @@ class String(Value):
 
     def __repr__(self):
         return f'"{self.value}"'
+
+
+class Action(Value):
+    def __init__(self, value):
+        super().__init__()
+        self.value = value
+
+    def copy(self):
+        copy = Action(self.value)
+        copy.set_pos(self.pos_start, self.pos_end)
+        copy.set_context(self.context)
+        return copy
+
+    def __str__(self):
+        return self.value
+
+    def __repr__(self):
+        return f'"{self.value}"'
+
+
+class Accessor(Value):
+    def __init__(self, accessor_id, accessor_context: AccessorContext):
+        super().__init__()
+        self.accessor_id = accessor_id
+        self.accessor_context = accessor_context
+
+    def get_value(self):
+        if self.accessor_id == 'FRONT_NEIGHBOR':
+            return String(self.accessor_context.front_neighbor)
+        elif self.accessor_id == 'HEALTH':
+            return Number(self.accessor_context.health)
+        elif self.accessor_id == 'POSITION':
+            return Number(self.accessor_context.position)
+        elif self.accessor_id == 'DIRECTION':
+            return Number(self.accessor_context.direction)
+        else:
+            res = RTResult()
+            return res.failure(RTError(
+                self.pos_start, self.pos_end,
+                f"{self.accessor_id} not setup for interpreter {self}",
+                self.context
+            ))
+
+    def copy(self):
+        copy = Action(self.accessor_id)
+        copy.set_pos(self.pos_start, self.pos_end)
+        copy.set_context(self.context)
+        return copy
+
+    def __str__(self):
+        return self.accessor_id
+
+    def __repr__(self):
+        return f'"{self.accessor_id}"'
 
 
 class List(Value):
@@ -390,15 +462,16 @@ class BaseFunction(Value):
 
 
 class Function(BaseFunction):
-    def __init__(self, name, body_node, arg_names, should_auto_return):
+    def __init__(self, name, body_node, arg_names, should_auto_return, accessor_context: AccessorContext):
         super().__init__(name)
         self.body_node = body_node
         self.arg_names = arg_names
         self.should_auto_return = should_auto_return
+        self.accessor_context = accessor_context
 
     def execute(self, args):
         res = RTResult()
-        interpreter = Interpreter()
+        interpreter = Interpreter(self.accessor_context)
         exec_ctx = self.generate_new_context()
 
         res.register(self.check_and_populate_args(self.arg_names, args, exec_ctx))
@@ -411,7 +484,7 @@ class Function(BaseFunction):
         return res.success(ret_value)
 
     def copy(self):
-        copy = Function(self.name, self.body_node, self.arg_names, self.should_auto_return)
+        copy = Function(self.name, self.body_node, self.arg_names, self.should_auto_return, self.accessor_context)
         copy.set_context(self.context)
         copy.set_pos(self.pos_start, self.pos_end)
         return copy
@@ -686,6 +759,9 @@ class SymbolTable:
 #######################################
 
 class Interpreter:
+    def __init__(self, accessor_context):
+        self.accessor_context = accessor_context
+
     def visit(self, node, context):
         method_name = f'visit_{type(node).__name__}'
         method = getattr(self, method_name, self.no_visit_method)
@@ -704,6 +780,16 @@ class Interpreter:
     def visit_StringNode(self, node, context):
         return RTResult().success(
             String(node.tok.value).set_context(context).set_pos(node.pos_start, node.pos_end)
+        )
+
+    def visit_ActionNode(self, node, context):
+        return RTResult().success(
+            Action(node.tok.value).set_context(context).set_pos(node.pos_start, node.pos_end)
+        )
+
+    def visit_AccessorNode(self, node, context):
+        return RTResult().success(
+            Accessor(node.tok.value, self.accessor_context).get_value().set_context(context).set_pos(node.pos_start, node.pos_end)
         )
 
     def visit_ListNode(self, node, context):
@@ -894,7 +980,7 @@ class Interpreter:
         func_name = node.var_name_tok.value if node.var_name_tok else None
         body_node = node.body_node
         arg_names = [arg_name.value for arg_name in node.arg_name_toks]
-        func_value = Function(func_name, body_node, arg_names, node.should_auto_return).set_context(context).set_pos(
+        func_value = Function(func_name, body_node, arg_names, node.should_auto_return, self.accessor_context).set_context(context).set_pos(
             node.pos_start, node.pos_end)
 
         if node.var_name_tok:
@@ -945,22 +1031,19 @@ global_symbol_table = SymbolTable()
 global_symbol_table.set("null", Number.null)
 global_symbol_table.set("False", Number.false)
 global_symbol_table.set("True", Number.true)
-global_symbol_table.set("MATH_PI", Number.math_PI)
-global_symbol_table.set("PRINT", BuiltInFunction.print)
-global_symbol_table.set("PRINT_RET", BuiltInFunction.print_ret)
-global_symbol_table.set("INPUT", BuiltInFunction.input)
-global_symbol_table.set("INPUT_INT", BuiltInFunction.input_int)
-global_symbol_table.set("CLEAR", BuiltInFunction.clear)
-global_symbol_table.set("CLS", BuiltInFunction.clear)
-global_symbol_table.set("IS_NUM", BuiltInFunction.is_number)
-global_symbol_table.set("IS_STR", BuiltInFunction.is_string)
-global_symbol_table.set("IS_LIST", BuiltInFunction.is_list)
-global_symbol_table.set("IS_FUN", BuiltInFunction.is_function)
-global_symbol_table.set("APPEND", BuiltInFunction.append)
-global_symbol_table.set("POP", BuiltInFunction.pop)
-global_symbol_table.set("EXTEND", BuiltInFunction.extend)
-global_symbol_table.set("LEN", BuiltInFunction.len)
-global_symbol_table.set("RUN", BuiltInFunction.run)
+global_symbol_table.set("math_pi", Number.math_PI)
+global_symbol_table.set("print", BuiltInFunction.print)
+global_symbol_table.set("print_ret", BuiltInFunction.print_ret)
+global_symbol_table.set("input", BuiltInFunction.input)
+global_symbol_table.set("input_int", BuiltInFunction.input_int)
+global_symbol_table.set("is_num", BuiltInFunction.is_number)
+global_symbol_table.set("is_str", BuiltInFunction.is_string)
+global_symbol_table.set("is_list", BuiltInFunction.is_list)
+global_symbol_table.set("is_fun", BuiltInFunction.is_function)
+global_symbol_table.set("append", BuiltInFunction.append)
+global_symbol_table.set("pop", BuiltInFunction.pop)
+global_symbol_table.set("extend", BuiltInFunction.extend)
+global_symbol_table.set("len", BuiltInFunction.len)
 
 
 def run(fn, text):
@@ -986,7 +1069,8 @@ def run(fn, text):
         print(data)
 
     # Run program
-    interpreter = Interpreter()
+    accessor_context = AccessorContext("ENEMY", 1, 2, 3)
+    interpreter = Interpreter(accessor_context)
     context = Context('<program>')
     context.symbol_table = global_symbol_table
     result = interpreter.visit(ast.node, context)

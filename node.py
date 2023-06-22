@@ -45,6 +45,42 @@ class StringNode(Node):
         return json_val
 
 
+class ActionNode(Node):
+    def __init__(self, tok):
+        self.tok = tok
+
+        self.pos_start = self.tok.pos_start
+        self.pos_end = self.tok.pos_end
+
+    def __repr__(self):
+        return f'{self.tok}'
+
+    def toJSON(self):
+        json_val = {
+            'type': type(self).__name__,
+            'tok': self.tok.toJSON()
+        }
+        return json_val
+
+
+class AccessorNode(Node):
+    def __init__(self, tok):
+        self.tok = tok
+
+        self.pos_start = self.tok.pos_start
+        self.pos_end = self.tok.pos_end
+
+    def __repr__(self):
+        return f'{self.tok}'
+
+    def toJSON(self):
+        json_val = {
+            'type': type(self).__name__,
+            'tok': self.tok.toJSON()
+        }
+        return json_val
+
+
 class ListNode(Node):
     def __init__(self, element_nodes, pos_start, pos_end):
         self.element_nodes = element_nodes

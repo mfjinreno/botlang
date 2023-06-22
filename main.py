@@ -1,17 +1,14 @@
-from botlang_lexer import Lexer
-from botlang_parser import Parser
 from botlang_interpreter import run as bl_run
-import json
 
 text = '''
 def func1(arg):
-    PRINT(arg)
-    if arg == 1:
-        PRINT("HELLO")
-        return 1
+    print(arg)
+    if _FRONT_NEIGHBOR == "ENEMY":
+        print("HELLO")
+        return $ATTACK
     else:
-        PRINT("WORLD")
-        return arg
+        print("WORLD")
+        return $MOVE
     END
 END
 

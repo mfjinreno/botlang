@@ -21,6 +21,8 @@ if HEALTH < 3 and FRONT_NEIGHBOR == ENEMY:
 TT_INT = 'INT'
 TT_FLOAT = 'FLOAT'
 TT_STRING = 'STRING'
+TT_ACTION = 'ACTION'
+TT_ACCESSOR = 'ACCESSOR'
 TT_IDENTIFIER = 'IDENTIFIER'
 TT_KEYWORD = 'KEYWORD'
 TT_PLUS = 'PLUS'
@@ -59,10 +61,28 @@ KEYWORDS = [
     'def'
 ]
 
+ACTIONS = [
+    '$ATTACK',
+    '$INFECT',
+    '$TURN_LEFT',
+    '$TURN_RIGHT',
+    '$MOVE',
+    '$PASS'
+]
+
+GLOBAL_ACCESSORS = [
+    '_FRONT_NEIGHBOR',
+    '_HEALTH',
+    '_POSITION',
+    '_DIRECTION'
+]
+
 #######################################
 # CONSTANTS
 #######################################
 
+ACTION_PREFIX = '$'
+GLOBAL_ACCESSOR_PREFIX = '_'
 DIGITS = '0123456789'
 LETTERS = string.ascii_letters
 LETTERS_DIGITS = LETTERS + DIGITS
@@ -158,6 +178,14 @@ class Lexer:
                 self.advance()
             elif self.current_char in DIGITS:
                 tokens.append(self.make_number())
+            elif self.current_char == ACTION_PREFIX:
+                token, error = self.make_action()
+                if error: return [], error
+                tokens.append(token)
+            elif self.current_char == GLOBAL_ACCESSOR_PREFIX:
+                token, error = self.make_global_accessor()
+                if error: return [], error
+                tokens.append(token)
             elif self.current_char in LETTERS:
                 tokens.append(self.make_identifier())
             elif self.current_char == '"':
@@ -209,6 +237,39 @@ class Lexer:
 
         tokens.append(Token(TT_EOF, pos_start=self.pos))
         return tokens, None
+
+
+    def make_action(self):
+        action_id = ''
+        pos_start = self.pos.copy()
+        self.advance()
+
+        while self.current_char is not None and self.current_char in LETTERS + '_':
+            action_id += self.current_char
+            self.advance()
+
+        if ACTION_PREFIX + action_id not in ACTIONS:
+            return None, InvalidSyntaxError(pos_start, self.pos,
+                                            "Invalid action: ${} - expected one of {}".format(action_id, str(ACTIONS))
+                                            )
+
+        return Token(TT_ACTION, action_id, pos_start, self.pos), None
+
+    def make_global_accessor(self):
+        accessor_id = ''
+        pos_start = self.pos.copy()
+        self.advance()
+
+        while self.current_char is not None and self.current_char in LETTERS + '_':
+            accessor_id += self.current_char
+            self.advance()
+
+        if GLOBAL_ACCESSOR_PREFIX + accessor_id not in GLOBAL_ACCESSORS:
+            return None, InvalidSyntaxError(pos_start, self.pos,
+                                            "Invalid accessor: _{} - expected one of {}".format(accessor_id, str(GLOBAL_ACCESSORS))
+                                            )
+
+        return Token(TT_ACCESSOR, accessor_id, pos_start, self.pos), None
 
     def make_number(self):
         num_str = ''

@@ -232,6 +232,16 @@ class Parser:
             self.advance()
             return res.success(StringNode(tok))
 
+        elif tok.type == TT_ACTION:
+            res.register_advancement()
+            self.advance()
+            return res.success(ActionNode(tok))
+
+        elif tok.type == TT_ACCESSOR:
+            res.register_advancement()
+            self.advance()
+            return res.success(AccessorNode(tok))
+
         elif tok.type == TT_IDENTIFIER:
             res.register_advancement()
             self.advance()
@@ -337,7 +347,6 @@ class Parser:
             res.register_advancement()
             self.advance()
 
-            # if self.current_tok.type == TT_NEWLINE:
             if self.current_tok.type == TT_COL:
                 res.register_advancement()
                 self.advance()
@@ -518,7 +527,6 @@ class Parser:
                 True
             ))
 
-        # if not self.current_tok.matches(TT_COL, ':'):
         if self.current_tok.type != TT_COL:
             return res.failure(InvalidSyntaxError(
                 self.current_tok.pos_start, self.current_tok.pos_end,
